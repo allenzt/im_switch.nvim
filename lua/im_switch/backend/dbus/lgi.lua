@@ -8,30 +8,96 @@ local M = {
   rime_proxy = nil,
 }
 
+-- 提取 IM 名称（模块级别函数，避免每次调用时重新定义）
+local function extract_im_name(result_value)
+  local result_type = type(result_value)
+
+  if result_type == "userdata" then
+    local ok, child = pcall(function()
+      return result_value:get_child_value(0)
+    end)
+    if ok then
+      local ok2, str = pcall(function()
+        return child:get_string()
+      end)
+      if ok2 then
+        return str
+      end
+    end
+  end
+
+  if result_type == "table" then
+    if result_value.value and result_value.value[1] then
+      return result_value.value[1]
+    elseif result_value[1] then
+      return result_value[1]
+    end
+  end
+
+  if result_type == "string" then
+    return result_value
+  end
+
+  return nil
+end
+
+-- 提取 boolean（模块级别函数，避免每次调用时重新定义）
+local function extract_boolean(result_value)
+  local result_type = type(result_value)
+
+  if result_type == "userdata" then
+    local ok, child = pcall(function()
+      return result_value:get_child_value(0)
+    end)
+    if ok then
+      local ok2, bool = pcall(function()
+        return child:get_boolean()
+      end)
+      if ok2 then
+        return bool
+      end
+    end
+  end
+
+  if result_type == "table" then
+    if result_value.value and result_value.value[1] ~= nil then
+      return result_value.value[1]
+    elseif result_value[1] ~= nil then
+      return result_value[1]
+    end
+  end
+
+  if result_type == "boolean" then
+    return result_value
+  end
+
+  return nil
+end
+
 ---Initialize the lgi D-Bus backend
 ---@return boolean: true if successful
 M.init = function()
-  -- Try to require lgi
   local ok, lgi = pcall(require, "lgi")
   if not ok then
-    lib.info("lgi not available")
     return false
   end
 
-  -- Create D-Bus proxy objects
   local Gio = lgi.require("Gio")
+  local GLib = lgi.require("GLib")
+  M.lgi = lgi
+  M.Gio = Gio
+  M.GLib = GLib
+
   local bus_ok, bus = pcall(function()
     return Gio.bus_get_sync(Gio.BusType.SESSION)
   end)
 
   if not bus_ok then
-    lib.error("Failed to create D-Bus session bus: " .. tostring(bus))
     return false
   end
 
   M.bus = bus
 
-  -- Create fcitx5 controller proxy
   local fcitx_ok, fcitx_proxy = pcall(function()
     return Gio.DBusProxy.new_sync(
       bus,
@@ -45,13 +111,11 @@ M.init = function()
   end)
 
   if not fcitx_ok then
-    lib.error("Failed to create fcitx5 controller proxy: " .. tostring(fcitx_proxy))
     return false
   end
 
   M.fcitx_proxy = fcitx_proxy
 
-  -- Try to create Rime proxy (optional)
   local rime_ok, rime_proxy = pcall(function()
     return Gio.DBusProxy.new_sync(
       bus,
@@ -66,13 +130,9 @@ M.init = function()
 
   if rime_ok then
     M.rime_proxy = rime_proxy
-    lib.info("Rime proxy created successfully")
-  else
-    lib.info("Rime proxy not available (Rime may not be enabled)")
   end
 
   M.initialized = true
-  lib.info("lgi backend initialized successfully")
   return true
 end
 
@@ -84,17 +144,18 @@ M.get_current_im = function()
   end
 
   local ok, result = pcall(function()
-    return M.fcitx_proxy:call_sync("GetCurrentInputMethod", nil, Gio.DBusCallFlags.NONE, -1, nil)
+    return M.fcitx_proxy:call_sync("CurrentInputMethod", nil, M.Gio.DBusCallFlags.NONE, -1)
   end)
 
-  if ok and result then
-    local imname = result and result[1] or result
-    lib.info(string.format("Current IM (D-Bus via lgi): %s", tostring(imname)))
-    return imname
+  if not ok then
+    return nil
   end
 
-  lib.error("Failed to get current IM via D-Bus (lgi)")
-  return nil
+  if result == nil then
+    return nil
+  end
+
+  return extract_im_name(result)
 end
 
 ---Switch to a specific input method
@@ -105,17 +166,12 @@ M.switch_to_im = function(imname)
     return false
   end
 
-  local ok, err = pcall(function()
-    M.fcitx_proxy:call_sync("SetCurrentInputMethod", GLib.Variant("(s)", {imname}), Gio.DBusCallFlags.NONE, -1, nil)
+  local ok = pcall(function()
+    local variant = M.GLib.Variant("(s)", {imname})
+    M.fcitx_proxy:call_sync("SetCurrentIM", variant, M.Gio.DBusCallFlags.NONE, -1)
   end)
 
-  if ok then
-    lib.info(string.format("Switched to IM (D-Bus via lgi): %s", imname))
-    return true
-  end
-
-  lib.error(string.format("Failed to switch to IM %s: %s", imname, tostring(err)))
-  return false
+  return ok
 end
 
 ---Get Rime ascii_mode state
@@ -126,17 +182,19 @@ M.get_rime_ascii_mode = function()
   end
 
   local ok, result = pcall(function()
-    return M.rime_proxy:call_sync("GetProperty", GLib.Variant("(s)", {"ascii_mode"}), Gio.DBusCallFlags.NONE, -1, nil)
+    return M.rime_proxy:call_sync("IsAsciiMode", nil, M.Gio.DBusCallFlags.NONE, -1)
   end)
 
-  if ok and result then
-    local value = result and result[1] or result
-    lib.info(string.format("Rime ascii_mode: %s", tostring(value)))
-    return value == true
+  if not ok or result == nil then
+    return nil
   end
 
-  lib.error("Failed to get Rime ascii_mode (lgi)")
-  return nil
+  local value = extract_boolean(result)
+  if value == nil then
+    return nil
+  end
+
+  return value == true
 end
 
 ---Set Rime ascii_mode state
@@ -147,17 +205,12 @@ M.set_rime_ascii_mode = function(ascii)
     return false
   end
 
-  local ok, err = pcall(function()
-    M.rime_proxy:call_sync("SetProperty", GLib.Variant("(sb)", {"ascii_mode", ascii}), Gio.DBusCallFlags.NONE, -1, nil)
+  local ok = pcall(function()
+    local variant = M.GLib.Variant("(b)", {ascii})
+    M.rime_proxy:call_sync("SetAsciiMode", variant, M.Gio.DBusCallFlags.NONE, -1)
   end)
 
-  if ok then
-    lib.info(string.format("Set Rime ascii_mode: %s", tostring(ascii)))
-    return true
-  end
-
-  lib.error(string.format("Failed to set Rime ascii_mode: %s", tostring(err)))
-  return false
+  return ok
 end
 
 return M

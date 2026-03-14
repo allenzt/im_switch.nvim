@@ -1,156 +1,111 @@
-local config = require("im_switch.config")
 local lib = require("im_switch.lib")
 
 local M = {
   current_backend = nil,
-  available_backends = {},
-  rime_module = nil,
 }
 
----Detect and load the best available backend
----@return table|nil: backend module or nil if none available
-M.detect = function()
-  local method = config.rime_state_method
+-- IM 查询缓存：插件自己是主要的 IM 切换者，记住上次状态可大幅减少 D-Bus 调用
+local im_cache = { value = nil, time = 0, ttl = 1000 }
 
-  lib.info(string.format("Detecting backend with method: %s", method))
-
-  if method == "auto" then
-    return M._detect_ldbus() or M._detect_lgi() or M._detect_remote()
-  elseif method == "dbus" then
-    return M._detect_ldbus() or M._detect_lgi()
-  elseif method == "lgi" then
-    return M._detect_lgi()
-  elseif method == "remote" then
-    return M._detect_remote()
-  else
-    lib.error(string.format("Unknown rime_state_method: %s", method))
-    return M._detect_remote() -- Fallback to remote
-  end
-end
-
----Detect ldbus backend
----@return table|nil: backend module or nil
-M._detect_ldbus = function()
-  local ok, ldbus = pcall(require, "im_switch.backend.dbus.ldbus")
-  if ok and ldbus.init() then
-    lib.info("ldbus backend detected and initialized")
-    return ldbus
-  end
-  return nil
-end
-
----Detect lgi backend
----@return table|nil: backend module or nil
-M._detect_lgi = function()
+local function init_lgi()
   local ok, lgi = pcall(require, "im_switch.backend.dbus.lgi")
   if ok and lgi.init() then
-    lib.info("lgi backend detected and initialized")
+    lib.info("lgi backend initialized")
     return lgi
   end
   return nil
 end
 
----Detect fcitx5-remote backend
----@return table|nil: backend module or nil
-M._detect_remote = function()
-  local ok, remote = pcall(require, "im_switch.backend.fcitx5_remote")
-  if ok and remote.init() then
-    lib.info("fcitx5-remote backend detected and initialized")
-    return remote
-  end
-  return nil
-end
-
----Initialize the backend system
----@return boolean: true if successful
 M.init = function()
-  M.current_backend = M.detect()
+  M.current_backend = nil
+  im_cache.value = nil
+  im_cache.time = 0
 
-  if M.current_backend then
-    lib.info(string.format("Backend initialized: %s", M.current_backend.name or "unknown"))
+  M.current_backend = init_lgi()
 
-    -- Initialize Rime state module if backend supports it
-    if M.current_backend.get_rime_ascii_mode and M.current_backend.set_rime_ascii_mode then
-      local rime_ok, rime = pcall(require, "im_switch.backend.dbus.rime")
-      if rime_ok then
-        rime.init(M.current_backend)
-        M.rime_module = rime
-        lib.info("Rime state module with caching initialized")
-      end
+  if not M.current_backend then
+    local remote_ok, remote = pcall(require, "im_switch.backend.remote")
+    if remote_ok and remote.init() then
+      M.current_backend = remote
     end
-
-    return true
   end
 
-  lib.error("No suitable backend found")
-  return false
+  if not M.current_backend then
+    lib.error("Backend initialization failed")
+    return false
+  end
+
+  lib.info(string.format("Backend: %s", M.current_backend.name or "unknown"))
+
+  -- 加载输入法状态驱动（rime 等）
+  local rime_ok = pcall(require, "im_switch.drivers.rime")
+  if rime_ok then
+    lib.info("Rime state driver loaded")
+  end
+
+  return true
 end
 
----Get current backend
----@return table|nil: current backend module
 M.get_backend = function()
   return M.current_backend
 end
 
----Get current input method
----@return string|nil: current IM name
 M.get_current_im = function()
-  if M.current_backend then
-    return M.current_backend.get_current_im()
+  if not M.current_backend then
+    return nil
   end
-  return nil
+  local now = vim.loop.now()
+  if im_cache.value and (now - im_cache.time) < im_cache.ttl then
+    return im_cache.value
+  end
+  local im = M.current_backend.get_current_im()
+  im_cache.value = im
+  im_cache.time = now
+  return im
 end
 
----Switch to a specific input method
----@param imname string: target input method name
----@return boolean: true if successful
 M.switch_to_im = function(imname)
-  if M.current_backend then
-    return M.current_backend.switch_to_im(imname)
+  if not M.current_backend then
+    return false
   end
-  return false
+  local now = vim.loop.now()
+  if im_cache.value == imname and im_cache.time > 0 and (now - im_cache.time) < im_cache.ttl then
+    return true
+  end
+  local current = M.current_backend.get_current_im()
+  if current == imname then
+    im_cache.value = imname
+    im_cache.time = now
+    return true
+  end
+  local ok = M.current_backend.switch_to_im(imname)
+  if ok then
+    im_cache.value = imname
+    im_cache.time = now
+  end
+  return ok
 end
 
----Get Rime ascii_mode state (if supported, with caching)
----@return boolean|nil: ascii_mode state or nil if not supported
+-- Rime ascii_mode: 直接透传，供 rime driver 使用
 M.get_rime_ascii_mode = function()
-  -- Use Rime module with caching if available
-  if M.rime_module then
-    return M.rime_module.get_ascii_mode()
-  end
-
-  -- Fallback to direct backend call
   if M.current_backend and M.current_backend.get_rime_ascii_mode then
     return M.current_backend.get_rime_ascii_mode()
   end
-
   return nil
 end
 
----Set Rime ascii_mode state (if supported, with caching)
----@param ascii boolean: ascii_mode value
----@return boolean: true if successful
 M.set_rime_ascii_mode = function(ascii)
-  -- Use Rime module with caching if available
-  if M.rime_module then
-    return M.rime_module.set_ascii_mode(ascii)
+  if not M.current_backend or not M.current_backend.set_rime_ascii_mode then
+    return false
   end
-
-  -- Fallback to direct backend call
-  if M.current_backend and M.current_backend.set_rime_ascii_mode then
-    return M.current_backend.set_rime_ascii_mode(ascii)
+  local get_fn = M.current_backend.get_rime_ascii_mode
+  if get_fn then
+    local current = get_fn()
+    if current == ascii then
+      return true
+    end
   end
-
-  return false
-end
-
----Get Rime cache information
----@return table|nil: cache info or nil if not supported
-M.get_rime_cache_info = function()
-  if M.rime_module then
-    return M.rime_module.get_cache_info()
-  end
-  return nil
+  return M.current_backend.set_rime_ascii_mode(ascii)
 end
 
 return M

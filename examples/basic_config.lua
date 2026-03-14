@@ -2,140 +2,69 @@
 -- im_switch.nvim Basic Configuration Example
 -- ==========================================
 
--- Load the plugin
+-- Minimal Configuration (Recommended)
+------------------------------------
+-- Only 3 configuration items needed!
 require('im_switch').setup({
-  -- Input method per mode
+  -- Input method per mode (only norm/ins/cmd supported)
+  -- 推荐配置：所有模式都使用 rime，插件会自动处理中英文状态
   imname = {
-    norm = 'keyboard-us',    -- Normal mode: use English keyboard
-    ins = 'rime',            -- Insert mode: use Rime (Chinese)
-    cmd = 'keyboard-us',     -- Command mode: use English keyboard
-    vis = 'keyboard-us',     -- Visual mode: use English keyboard
-    sel = 'keyboard-us',     -- Select mode: use English keyboard
-    opr = 'keyboard-us',     -- Operator-pending mode: use English keyboard
-    term = 'keyboard-us',    -- Terminal mode: use English keyboard
-    lang = 'keyboard-us',    -- Language mode: use English keyboard
+    norm = 'rime',    -- Normal mode: 使用 rime 英文模式
+    ins = 'rime',     -- Insert mode: 使用 rime (恢复之前的中英文状态)
+    cmd = 'rime',     -- Command mode: 使用 rime 英文模式
   },
 
-  -- Remember prior IM per mode (Layer 1)
-  remember_prior = true,
-
-  -- Enable Rime state memory (Layer 2) - Core Innovation!
-  remember_rime_state = true,
-
-  -- Backend selection method
-  -- "auto" - automatically detect best backend (recommended)
-  -- "dbus" - use D-Bus backends (ldbus or lgi)
-  -- "lgi" - force use lgi backend
-  -- "remote" - force use fcitx5-remote CLI
-  rime_state_method = 'auto',
-
-  -- Cache Rime state for this many milliseconds (default: 5000ms)
-  -- Higher values = fewer D-Bus calls but potentially stale data
-  rime_state_cache_ttl = 5000,
-
-  -- Automatically define ModeChanged autocmd
-  define_autocmd = true,
-
-  -- Autostart fcitx5 if not running
-  autostart_fcitx5 = true,
+  -- Enable Rime state memory (remembers Chinese/English state per buffer)
+  enable_rime_memory = true,
 
   -- Log level: "info", "warn", "error"
-  log = "warn",
-
-  -- Startup message
-  msg = "im_switch.nvim loaded successfully!",
+  log_level = "warn",
 })
 
 -- ==========================================
--- Common Configuration Scenarios
+-- What This Configuration Does
 -- ==========================================
 
 --[[
-Scenario 1: Minimal Configuration (Just Works)
------------------------------------------------
-Use this if you want the plugin to work with minimal setup.
+Core Features (Automatic):
+--------------------------
+1. Mode Auto-Switching:
+   - Normal mode: Rime 强制英文模式 (用于输入命令)
+   - Insert mode: Rime 恢复之前的中英文状态
+   - Command mode: Rime 强制英文模式 (用于输入命令)
 
-require('im_switch').setup({
-  imname = {
-    norm = 'keyboard-us',
-    ins = 'rime',
-  },
-  remember_rime_state = true,  -- Remember Rime Chinese/English state
-})
-]]--
+2. Per-Buffer State Memory:
+   - 每个 buffer 记住自己的输入法状态
+   - 在 buffer 之间切换时自动恢复各自的中文/英文状态
 
---[[
-Scenario 2: Multiple IMs
-------------------------
-Use different IMs for different modes.
+3. Rime Chinese/English State Memory:
+   - 记住你是在中文模式 (ascii_mode=false) 还是英文模式 (ascii_mode=true)
+   - 返回 buffer 时自动恢复正确的状态
 
-require('im_switch').setup({
-  imname = {
-    norm = 'keyboard-us',
-    ins = 'rime',
-    cmd = 'keyboard-us',
-    vis = 'pinyin',  -- Use Pinyin in visual mode for searching
-  },
-})
-]]--
+4. 优先使用 Rime 英文模式:
+   - norm 和 cmd 模式强制使用 rime 英文模式
+   - 避免在不同输入法之间频繁切换
+   - 提高响应速度和用户体验
 
---[[
-Scenario 3: Disable Rime State Memory
---------------------------------------
-If you don't use Rime or don't need state memory.
-
-require('im_switch').setup({
-  imname = {
-    norm = 'keyboard-us',
-    ins = 'rime',
-  },
-  remember_rime_state = false,  -- Disable Layer 2
-  rime_state_method = 'remote', -- Use CLI only
-})
-]]--
-
---[[
-Scenario 4: Force Specific Backend
-----------------------------------
-Force use of a specific backend for troubleshooting.
-
-require('im_switch').setup({
-  imname = {
-    norm = 'keyboard-us',
-    ins = 'rime',
-  },
-  rime_state_method = 'lgi',  -- Force lgi backend
-})
-]]--
-
---[[
-Scenario 5: Advanced Cache Configuration
------------------------------------------
-Fine-tune cache for performance.
-
-require('im_switch').setup({
-  imname = {
-    norm = 'keyboard-us',
-    ins = 'rime',
-  },
-  rime_state_cache_ttl = 10000,  -- 10 second cache
-  log = "info",  -- Enable verbose logging
-})
+5. Always-Enabled Autocmds:
+   - ModeChanged 事件自动挂钩
+   - 无需手动设置
 ]]--
 
 -- ==========================================
--- Using Commands
+-- Available Commands
 -- ==========================================
 
 --[[
-Common Commands:
-----------------
-:ImSwitch                    - Show help
-:ImSwitchSetName rime        - Force switch to Rime
-:ImSwitchGeneious            - Switch to appropriate IM for current mode
-:ImSwitchSetPrior rime ins   - Set Rime as prior for insert mode
-:ImSwitchGetImname ins       - Get IM name for insert mode
-:ImSwitchGetImnames          - Get all IM names
+Simplified Commands (only 3!):
+-------------------------------
+:ImSwitch          - Show help
+:ImSwitchSet rime  - Force switch to Rime
+:ImSwitchStatus    - Display current status
+
+Example Usage:
+:ImSwitchSet keyboard-us  - Switch to US keyboard
+:ImSwitchStatus           - Show current IM and buffer states
 ]]--
 
 -- ==========================================
@@ -152,15 +81,47 @@ local current_im = backend.get_current_im()
 -- Switch to specific IM
 backend.switch_to_im('rime')
 
--- Get Rime state
+-- Get Rime state (true = English, false = Chinese)
 local ascii_mode = backend.get_rime_ascii_mode()
 
--- Set Rime state (true = English, false = Chinese)
-backend.set_rime_ascii_mode(false)
+-- Set Rime state
+backend.set_rime_ascii_mode(false)  -- Switch to Chinese
+backend.set_rime_ascii_mode(true)   -- Switch to English
 
 -- Get cache info
 local cache_info = backend.get_rime_cache_info()
 print(vim.inspect(cache_info))
+]]--
+
+-- ==========================================
+-- Common Scenarios
+-- ==========================================
+
+--[[
+Scenario 1: 带中文注释的单文件
+----------------------------
+编辑一个带中文注释的 Lua 文件:
+- Normal mode: Rime 英文模式 (输入命令)
+- Insert mode: Rime 中文模式 (输入注释)
+- Command mode: Rime 英文模式 (输入命令)
+
+Scenario 2: 多文件不同状态
+---------------------------
+- Buffer 1 (README.md): Insert 模式使用中文
+- Buffer 2 (script.lua): Insert 模式使用英文
+- 在 buffer 之间切换时自动恢复各自的状态
+
+Scenario 3: 优先使用 Rime 英文模式
+-----------------------------------
+- Norm/Cmd 模式: Rime 强制切换到英文模式
+- Ins 模式: Rime 恢复之前的中英文状态
+- 避免在不同输入法之间切换，提高响应速度
+
+Scenario 4: Insert 模式状态恢复
+--------------------------------
+- 在 Insert 模式下离开 buffer (中文输入)
+- 切换到 Normal 模式，跳转到其他 buffer
+- 返回原 buffer → Insert 模式恢复中文输入
 ]]--
 
 -- ==========================================
@@ -170,21 +131,21 @@ print(vim.inspect(cache_info))
 --[[
 If the plugin is not working:
 
-1. Check if fcitx5-remote is available:
+1. Check if fcitx5 is running:
    :!fcitx5-remote -n
 
 2. Enable verbose logging:
-   log = "info"
+   log_level = "info"
 
-3. Check backend detection:
-   Run: :ImSwitchGetImnames
+3. Verify D-Bus connection:
+   :lua print(require('im_switch.backend').get_backend().name)
 
-4. Verify Rime is enabled in fcitx5
+4. Test manual switching:
+   :ImSwitchSet rime
 
-5. Test manual switching:
-   :ImSwitchSetName rime
-
-6. Check if ldbus/lgi is installed:
-   :lua print(pcall(require, "dbus.shared"))
+5. Check if lgi is installed:
    :lua print(pcall(require, "lgi"))
+
+6. View current status:
+   :ImSwitchStatus
 ]]--

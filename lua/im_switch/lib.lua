@@ -3,18 +3,16 @@
 -- AND THE LICENSE BELONGS TO THEM.                                       --
 ----------------------------------------------------------------------------
 
+local base_functions = require("im_switch.base_functions")
+
 local M = {}
 
 M.plugin_name = "ImSwitch Plugin"
 M.plugin_icon = " "
 M.plugin_commands = {
   ImSwitch = "Show Help",
-  ImSwitchSetName = "Force load the input method. Expect one arg of `imname`.",
-  ImSwitchGeneious = "Does what should be intuitive.",
-  ImSwitchOnModeChanged = "Function to call as an autocmd.",
-  ImSwitchSetPrior = "Manually set prior imname. Expect args of `imname` and `mode`.",
-  ImSwitchGetImname = "Get the `imname` for the given mode. Expect one arg of `mode` or if none, uses current mode.",
-  ImSwitchGetImnames = "Return a list of `imname` for all modes.",
+  ImSwitchSet = "Switch to specific input method. Usage: ImSwitchSet <imname>",
+  ImSwitchStatus = "Display current input method status",
 }
 
 M.help = function()
@@ -33,7 +31,7 @@ M.echo = function(msg, level, opts)
   opts = opts or {}
   opts.title = opts.title or M.plugin_name
   opts.icon = opts.icon or M.plugin_icon
-  require("im_switch.base_functions").echo(msg, level, opts)
+  base_functions.echo(msg, level, opts)
 end
 
 ---wrapper of base-functions.echo: adds title and icon

@@ -1,120 +1,69 @@
-# Quick Start Guide
+# im_switch.nvim 快速开始
 
-## Installation
+## 🎯 一键安装 ldbus
 
-### 1. Install Dependencies
-
-```bash
-# Required
-sudo apt-get install fcitx5 fcitx5-remote
-
-# Optional (for Rime state memory - Recommended!)
-sudo apt-get install libdbus-1-dev
-luarocks install ldbus
-```
-
-### 2. Install Plugin
-
-Using [packer.nvim](https://github.com/wbthomason/packer.nvim):
-
-```lua
-use {
-  'yourusername/im_switch.nvim',
-  config = function()
-    require('im_switch').setup({
-      imname = {
-        norm = 'keyboard-us',
-        ins = 'rime',
-        cmd = 'keyboard-us',
-      },
-      remember_rime_state = true,  -- Enable Rime state memory!
-    })
-  end
-}
-```
-
-### 3. Verify Installation
-
-Run the test script in Neovim:
+在 Neovim 中运行：
 
 ```vim
-:luafile /path/to/im_switch.nvim/examples/test_installation.lua
+:ImSwitchInstallLdbus
 ```
 
-All tests should pass.
+这是**推荐方式**，最简单最快！插件会自动：
+1. 下载 ldbus 源码
+2. 编译安装
+3. 提示重启 Neovim
 
-## Basic Usage
+## 📋 安装步骤
 
-1. **Enter Insert Mode**: Press `i`
-   - IM automatically switches to Rime
-   - Rime remembers if you were in Chinese or English mode
+### 1. 安装系统依赖
 
-2. **Return to Normal Mode**: Press `Esc`
-   - IM automatically switches to English keyboard
-   - Rime state (Chinese/English) is saved
+```bash
+sudo apt-get install -y libdbus-1-dev build-essential git
+```
 
-3. **Enter Insert Mode Again**: Press `i`
-   - IM automatically switches to Rime
-   - **Rime automatically restores your previous Chinese/English state!** ⭐
+### 2. 安装 ldbus
 
-## Common Commands
+**方式 A: Neovim 命令（推荐）**
+```vim
+:ImSwitchInstallLdbus
+```
 
-| Command | Description |
-|---------|-------------|
-| `:ImSwitch` | Show help |
-| `:ImSwitchSetName rime` | Force switch to Rime |
-| `:ImSwitchGetImnames` | See all configured IMs |
+**方式 B: 安装脚本**
+```bash
+cd ~/data/repo/input/im_switch.nvim
+./scripts/install_ldbus_from_source.sh
+```
 
-## Troubleshooting
+### 3. 重启 Neovim
 
-### IM doesn't switch
+安装完成后重启 Neovim 使更改生效。
 
-1. Check fcitx5 is running:
-   ```bash
-   ps aux | grep fcitx5
-   ```
+## ✅ 验证安装
 
-2. Test fcitx5-remote:
-   ```bash
-   fcitx5-remote -n  # Get current IM
-   fcitx5-remote -s rime  # Switch to Rime
-   ```
+```vim
+:lua print(require('im_switch.backend').get_backend().name)
+" 应该输出: ldbus
+```
 
-3. Enable verbose logging:
-   ```lua
-   require('im_switch').setup({
-     log = "info",  -- Show detailed logs
-   })
-   ```
+## 🎉 完成！
 
-### Rime state doesn't restore
+现在你拥有：
+- ⚡ **最快速度**: ldbus (5-10ms)
+- ✅ **Rime 状态记忆**: 自动记住中英文状态
+- 🎯 **Smart Normal Mode**: Normal 模式保持 Rime 英文
+- 🔧 **自动配置**: 无需手动设置
 
-1. Check if ldbus is installed:
-   ```vim
-   :lua print(pcall(require, "dbus.shared"))
-   ```
+## 📚 更多信息
 
-2. Verify Rime is enabled in fcitx5:
-   - Open fcitx5 configuration
-   - Check "Rime" is in the input method list
+- **docs/INSTALL_LDBUS.md**: 详细安装指南
+- **docs/SMART_NORMAL_MODE.md**: Smart Normal Mode 说明
+- **AUTOMATED_TESTING.md**: 自动化测试工具
 
-3. Check backend detection:
-   ```vim
-   :ImSwitchGetImnames
-   ```
-   Should show the detected backend.
+## 🐛 遇到问题？
 
-## Next Steps
+查看故障排查：`docs/INSTALL_LDBUS.md#故障排查`
 
-- Read the full [README.md](README.md) for advanced configuration
-- Check [examples/basic_config.lua](examples/basic_config.lua) for more examples
-- Customize your IM mappings in the config
-
-## The Core Innovation
-
-What makes this plugin special is **Layer 2 state memory**:
-
-- **Layer 1**: Mode → Input Method (like other plugins)
-- **Layer 2**: Rime Chinese/English state (unique to this plugin!)
-
-This means you never have to manually switch Rime back to Chinese after pressing Esc! 🎉
+或运行自动化测试：
+```bash
+./scripts/auto_test.sh
+```

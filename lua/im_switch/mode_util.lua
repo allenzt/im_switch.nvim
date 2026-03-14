@@ -46,14 +46,13 @@ M.map = {
 
 ---return the mode name based on `mode_char`
 ---@param mode? string: literal char result from `vim.api.nvim_get_mode()`. If none, current mode is used.
--- More details: https://neovim.io/doc/user/builtin.html#mode()
 ---@return string: mode name
 function M.get_mode(mode)
-  local mode_code = mode or vim.api.nvim_get_mode().mode
-  if M.map[mode_code] == nil then
-    return mode_code
+  local mode_code = mode
+  if mode_code == nil then
+    mode_code = vim.api.nvim_get_mode().mode
   end
-  return M.map[mode_code]
+  return M.map[mode_code] or mode_code
 end
 
 return M
